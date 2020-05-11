@@ -15,4 +15,9 @@ Instructions
 5. Go to tools -> lua console -> script -> open script, then open the Play.lua script in this directory
 6. Run for a while, adjust weights as desired. Fitness score data will be saved into fitness.txt
 
-![Alt text](assets\screenshot.PNG?raw=true "Screenshot")
+Special thansk to
+----------------
+https://github.com/nicknlsn/MarioKart64NEAT
+and 
+https://github.com/rameshvarun/NeuralKart
+some lua scripts were borrowed from these projects, and they were the inspiration for our project
