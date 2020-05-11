@@ -1,6 +1,6 @@
 Genetic Kart
-(i need a better name)
 ==========
+i need a better name
 
 self-driving Mario Kart 64 using genetic algorithm
 

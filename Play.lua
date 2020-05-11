@@ -165,7 +165,7 @@ function initialize_things()
     0x0} --
  
     --weights that should be optimized
-    population_size = 20
+    population_size = 100
     mutation_rate = 0.02
     frame_interval = 5
     genome_size = 1000
