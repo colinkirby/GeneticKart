@@ -15,4 +15,4 @@ Instructions
 5. Go to tools -> lua console -> script -> open script, then open the Play.lua script in this directory
 6. Run for a while, adjust weights as desired. Fitness score data will be saved into fitness.txt
 
-![screenshot]["assets\screenshot.PNG"]
+![Alt text](assets\screenshot.PNG?raw=true "Screenshot")
