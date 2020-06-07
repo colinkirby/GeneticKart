@@ -4,8 +4,20 @@
 local util = require(".util")
 
 function initialize_things()
-    local verbose = true
+    local verbose = false
     console.clear()
+
+
+
+
+
+
+
+
+
+
+
+----------------------------------------------------------------------------Stuff not to worry about-----------------------------------------------------------------
 	state_file = "states/tt/LR.state"
     file = io.open("fitness.txt", "a")
     file:write("New Iteration" , "\n")
@@ -26,9 +38,7 @@ function initialize_things()
     
 
     num_buttons = #button_actual_names
- 
     course = {}
- 
     -- collision address
     course.col_addresses = {
     0x1D65A0,  -- Mario Raceway
@@ -74,7 +84,6 @@ function initialize_things()
     "",
     2,
     ""}
- 
     course.names = {
     "Mario Raceway      ",
     "Choco Mountain     ",
@@ -96,9 +105,7 @@ function initialize_things()
     "Double Deck        ",
     "DK's Jungle Parkway",
     "Big Donut          "}
- 
     savestate.load(state_file)
- 
     course.selected_addr = 0xDC5A0
     course.number = mainmemory.read_u16_be(course.selected_addr) + 1
     course.name = course.names[course.number]
@@ -110,10 +117,8 @@ function initialize_things()
     course.p2_offset = 0x15
     course.p3_offset = 0x19
     course.tr_attr = course.track_attribute[course.number]
- 
     -- this loads the map, just the track sections though
     load_map()
- 
     -- kart data
     kart = {}
     kart.x_addr = 0x0F69A4
@@ -125,10 +130,8 @@ function initialize_things()
     dist_addr = 0x16328A
     kart.sin = 0xF6B04
     kart.cos = 0xF6B0C
- 
     character_addr = 0x0DC53B
     character = mainmemory.read_u8(character_addr)
- 
     -- object addresses
     obj = {}
     obj.addr = 0x15F9B8
@@ -137,7 +140,6 @@ function initialize_things()
     obj.x_offset = 0x18
     obj.y_offset = 0x1C
     obj.z_offset = 0x20
- 
     -- some colors
     black  = 0xFF000000
     white  = 0xFFFFFFFF
@@ -164,35 +166,43 @@ function initialize_things()
     0x0, --
     0x0, --
     0x0} --
- 
+ --------------------------------------------------------------------------END Stuff Not to worry about
+
+
     --weights that should be optimized
     num_species = 10
     mutation_rate = 0.02
     frame_interval = 5
-    genome_size = 3000
+    genome_size = 50
 
 
-    max_nodes = 1000000
 
-    total_fitness = 0
-
+    generation_max_fitness = 0
+    generation_total_fitness = 0
     current_species = 1
     current_generation = 1
+    generation = {}
+
 
     frame_count = -1
     previous_distance = -2
     previous_time = 0
     time_segment = 0
-    max_fitness = 0
 
-    generation = {}
-    generation_fitness = {}
-    gene_reached = {}
     initialize_population()
-
     clear_controller()
 end -- end initialize_things
 
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------STUFF THAT WORKS---------------------------------------------------------------
 function load_map()
     the_course = {}
     -- TODO find where the collision addresses end for each track
@@ -227,13 +237,79 @@ function load_map()
     end
 end
 
+--renders information
+function display_info()
+	gui.drawBox(-1, 214, 320, 240, none, bwhite)
+	-- gui.drawText(-2, 212, course.name, black, none)
+	gui.drawText(-2, 212, "Generation:"..current_generation, black, none)
+	gui.drawText(120, 212, "Species:"..current_species, black, none)
+    gui.drawText(
+		120, 224, "Max Fitness:"..round(generation_max_fitness), black, none
+		)
+    gui.drawText(-1, 224, "Fitness:".. round(fitness), black, none)
+end
 
 
+--Not all of these are necessary, but could be useful for future work
+function refresh()
+    frame_count = frame_count + 1
+
+    distance = mainmemory.read_s16_be(dist_addr)
+    time = util.readTimer()
+ 
+    k_sin    = mainmemory.readfloat(kart.sin,     true)
+    k_cos    = mainmemory.readfloat(kart.cos,     true)
+ 
+    kart_x   = mainmemory.readfloat(kart.x_addr,  true)
+    kart_xv  = mainmemory.readfloat(kart.xv_addr, true) * 12
+    kart_y   = mainmemory.readfloat(kart.y_addr,  true)
+    kart_yv  = mainmemory.readfloat(kart.yv_addr, true) * 12
+    kart_z   = mainmemory.readfloat(kart.z_addr,  true)
+    kart_zv  = mainmemory.readfloat(kart.zv_addr, true) * 12
+ 
+    XYspeed  = math.sqrt (kart_xv^2+kart_yv^2)
+    XYZspeed = math.sqrt (kart_xv^2+kart_yv^2+kart_zv^2)
+end
+
+--takes gene input and gives controller instructions 
+function gene_to_controller(gene) 
+    local left = (gene == "10")
+    local right = (gene == "01")
+
+    for i,v in ipairs(button_input_names) do
+        if(i == 2) then
+            controller[v] = left
+        elseif(i == 3)  then   
+            controller[v] = right 
+        end 
+    end 
+end
+
+
+---------------------------------------------------------------------------------END STUFF THAT JUST WORKS
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------Creating each generation of species------------------------------------------
 --GENERATE POPULATION
 function initialize_population()
     for i = 1, num_species do
         generation[#generation + 1] = {
             genome = new_genome(),
+            current_gene = 1,
             furthest_gene_reached = 0, --Time spent playing is tied with this
             fitness = 0,
             distance = 0
@@ -245,9 +321,9 @@ end
 
 --generates the genome
 function new_genome()
-    local genome = ""
+    local genome = {}
     for i = 1, genome_size do
-        genome = genome..new_gene()
+        genome[#genome+1] = new_gene()
     end
     return genome 
 end 
@@ -266,33 +342,14 @@ function new_gene()
     return gene 
 end 
 
---takes gene input and gives controller instructions 
-function gene_to_controller(gene) 
-    local left = (gene == "10")
-    local right = (gene == "01")
 
-    for i,v in ipairs(button_input_names) do
-        if(i == 2) then
-            controller[v] = left
-        elseif(i == 3)  then   
-            controller[v] = right 
-        end 
-    end 
-end
-
---compute fitness
-function get_fitness_score()
-    local score = 0
-    time_segment = time - previous_time
-
-    if(distance > -1) then
-        score = (1 / time_segment)
-    end
-    return score
-end
+----------------------------------------------------------------------------END create new generation's species
 
 
---selects species for reproduction based on fitness weighted random selection
+
+
+
+------------------------------------------------------------------selecting the best species---------------------------------------------------
 function select_best_species()
     local normalized_fitness = {}
     local normalized_accumulated_fitness = {}
@@ -316,7 +373,7 @@ function select_best_species()
 
 --saves each species' percentage pf total fitness, in the order than ran the course
     for _, fit in ipairs(generation_fitness) do 
-        normalized_fitness[#normalized_fitness + 1] = (fit / total_fitness) * 100
+        normalized_fitness[#normalized_fitness + 1] = (fit / generation_total_fitness) * 100
     end
 
     --accumulated normalized values
@@ -342,7 +399,7 @@ function select_best_species()
     generation = {}
     generation_fitness = {}
     gene_reached = {}
-    total_fitness = 0
+    generation_total_fitness = 0
     generation = shallowCopy(temp_gen)
 end  
 
@@ -395,9 +452,6 @@ function crossover(p1, p2)
     end
 
 
-
-    
-
     child1 = mutate(child1)
     child2 = mutate(child2)
 
@@ -422,6 +476,7 @@ function mutate(c)
     return c
 end 
 
+--------------------------------------------------------------------------END selecting the best species
 --resets controller input
 function clear_controller()
     controller = {}
@@ -441,9 +496,9 @@ function next_species()
     -- gene_reached[#gene_reached + 1] = current_gene
     generation[#generation + 1] = generation[current_species]
     generation_fitness[#generation_fitness + 1] = fitness
-    total_fitness = total_fitness + fitness
-    if(fitness > max_fitness) then
-        max_fitness = fitness
+    generation_total_fitness = generation_total_fitness + fitness
+    if(fitness > generation_max_fitness) then
+        generation_max_fitness = fitness
     end  
     fitness = 0 
     current_species = current_species + 1
@@ -464,39 +519,18 @@ function next_generation()
     select_best_species()
 end  
 
---renders information
-function display_info()
-	gui.drawBox(-1, 214, 320, 240, none, bwhite)
-	-- gui.drawText(-2, 212, course.name, black, none)
-	gui.drawText(-2, 212, "Generation:"..current_generation, black, none)
-	gui.drawText(120, 212, "Species:"..current_species, black, none)
-    gui.drawText(
-		120, 224, "Max Fitness:"..round(max_fitness), black, none
-		)
-    gui.drawText(-1, 224, "Fitness:".. round(fitness), black, none)
+
+--compute fitness
+function get_fitness_score()
+    local score = 0
+    time_segment = time - previous_time
+
+    if(distance > -1) then
+        score = (1 / time_segment)
+    end
+    return score
 end
 
-
---Not all of these are necessary, but could be useful for future work
-function refresh()
-    frame_count = frame_count + 1
-
-    distance = mainmemory.read_s16_be(dist_addr)
-    time = util.readTimer()
- 
-    k_sin    = mainmemory.readfloat(kart.sin,     true)
-    k_cos    = mainmemory.readfloat(kart.cos,     true)
- 
-    kart_x   = mainmemory.readfloat(kart.x_addr,  true)
-    kart_xv  = mainmemory.readfloat(kart.xv_addr, true) * 12
-    kart_y   = mainmemory.readfloat(kart.y_addr,  true)
-    kart_yv  = mainmemory.readfloat(kart.yv_addr, true) * 12
-    kart_z   = mainmemory.readfloat(kart.z_addr,  true)
-    kart_zv  = mainmemory.readfloat(kart.zv_addr, true) * 12
- 
-    XYspeed  = math.sqrt (kart_xv^2+kart_yv^2)
-    XYZspeed = math.sqrt (kart_xv^2+kart_yv^2+kart_zv^2)
-end
 
 function play()
     game = gameinfo.getromname()
@@ -507,8 +541,9 @@ function play()
     end
     
     while correct_game do
+        --------------------------------------------------------Change Species
         if(distance < previous_distance or time_segment > 1.5 or (util.readVelocity() < 1 and distance > 0)) then
-            if(verbose) do
+            if(verbose) then
                 print("Loading Next Species")
                 next_species()
                 print("Loaded Next Species")
@@ -517,17 +552,21 @@ function play()
             end
         end 
 
+        -------------------------------------------------------Change Generation
         if(current_species > num_species) then
-            max_fitness = 0
+            generation_max_fitness = 0
             next_generation()
         end
 
         refresh()
         display_info()
-        print(generation[current_species].genome)
+
+
+
+        ------------------------------------------------------Update 
 
         if(frame_count % frame_interval == 0) then
-            if(verbose) do
+            if(verbose) then
                 print("Sending Gene To Controller")
                 print("Genome"..generation[current_species].genome)
                 print("Current Gene".. current_gene)
@@ -537,13 +576,13 @@ function play()
                 end
                 print(temp..generation[current_species].genome[current_gene]) --Adds periods before so looking at the gene in the console may be easier
             end
-            gene_to_controller(generation[current_species].genome[current_gene])
-            current_gene = current_gene + 1 --Two because each gene is two chars?
+            gene_to_controller(generation[current_species].genome[generation[current_species].current_gene])
+            generation[current_species].current_gene = generation[current_species].current_gene + 1
         end
 
         joypad.set(controller)
         if(distance % 5 == 0 and distance ~= previous_distance) then
-            fitness = fitness + get_fitness_score()
+            generation[current_species].fitness = generation[current_species].fitness + get_fitness_score()
             previous_distance = distance 
             previous_time = time 
         end
