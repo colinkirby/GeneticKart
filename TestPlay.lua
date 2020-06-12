@@ -170,8 +170,8 @@ function initialize_things()
 
 
     --weights that should be optimized
-    num_species = 2
-    mutation_rate = 0.1 --Can be from 0.00 to 1.00
+    num_species = 10
+    mutation_rate = 0.05 --Can be from 0.00 to 1.00
     frame_interval = 5
     genome_size = 1000
 
@@ -199,6 +199,7 @@ function initialize_things()
     distance = 0
     prev_distance = -2
     most_fit_species = {}
+    world_max_fitness = 0
 
     initialize_population()
     clear_controller()
@@ -251,13 +252,12 @@ end
 --renders information
 function display_info()
 	gui.drawBox(-1, 214, 320, 240, none, bwhite)
-	-- gui.drawText(-2, 212, course.name, black, none)
 	gui.drawText(-2, 212, "Generation:"..current_generation, black, none)
-	gui.drawText(120, 212, "Species:"..current_species, black, none)
-    gui.drawText(
-		120, 224, "Max Fitness:"..round(generation_max_fitness), black, none
-		)
-    gui.drawText(-1, 224, "Fitness:".. round(fitness), black, none)
+    gui.drawText(105, 212, "Species:"..current_species, black, none)
+    gui.drawText(185, 212, "Fitness:".. round(fitness), black, none)
+    gui.drawText(-1, 224, "World Max Fitness:"..round(world_max_fitness), blue, none)
+    gui.drawText(175, 224, "Gen. Max Fitness:"..round(generation_max_fitness), black, none)
+    
 end
 
 
@@ -474,6 +474,9 @@ function next_species()
         generation_max_fitness = fitness
         most_fit_species = generation[current_species]
     end  
+    if(fitness > world_max_fitness) then
+        world_max_fitness = fitness
+    end
 
     frame_count = -1
     prev_distance = -2
@@ -513,7 +516,6 @@ end
 
 
 function play()
-    print("sb vkesdvbesvbbjkrsbk")
     game = gameinfo.getromname()
     correct_game = "Mario Kart 64 (USA)" == game
     initialize_things()
@@ -522,7 +524,8 @@ function play()
     end
     
     while correct_game do
-        if(frame_count > 180 and (distance < prev_distance or util.readVelocity() < VELOCITY_THRESHOLD)) then
+        -- ((kart_x < -185 or -91 < kart_x)
+        if(frame_count>180 and (distance < prev_distance or util.readVelocity() < VELOCITY_THRESHOLD)) then
             next_species()
         elseif(current_species > num_species) then
             next_generation()
