@@ -199,6 +199,7 @@ function initialize_things()
     distance = 0
     prev_distance = -2
     most_fit_species = {}
+    tiles = {}
     world_max_fitness = 0
 
     initialize_population()
@@ -209,12 +210,7 @@ end -- end initialize_things
 
 
 
-
-
-
-
-
--------------------------------------------------------------------------------STUFF THAT WORKS---------------------------------------------------------------
+-------------------------------------------------------------------------------Loading the map
 function load_map()
     the_course = {}
     -- TODO find where the collision addresses end for each track
@@ -249,15 +245,23 @@ function load_map()
     end
 end
 
---renders information
+----------------------------------------------------------------------------------------------render information
 function display_info()
 	gui.drawBox(-1, 214, 320, 240, none, bwhite)
 	gui.drawText(-2, 212, "Generation:"..current_generation, black, none)
     gui.drawText(105, 212, "Species:"..current_species, black, none)
     gui.drawText(185, 212, "Fitness:".. round(fitness), black, none)
+    gui.drawText(205, 212, "onTrack:".. yesOrNo(onTrack))
     gui.drawText(-1, 224, "World Max Fitness:"..round(world_max_fitness), blue, none)
     gui.drawText(175, 224, "Gen. Max Fitness:"..round(generation_max_fitness), black, none)
-    
+end
+
+function yesOrNo(bool)
+    if(bool)then
+        return "Yes"
+    else
+        return "No"
+    end
 end
 
 
@@ -282,7 +286,7 @@ function refresh()
     XYZspeed = math.sqrt (kart_xv^2+kart_yv^2+kart_zv^2)
 end
 
---takes gene input and gives controller instructions 
+-----------------------------------------------------------------------------------takes gene input and gives controller instructions 
 function gene_to_controller(gene) 
     local left = (gene == "10")
     local right = (gene == "01")
@@ -297,20 +301,48 @@ function gene_to_controller(gene)
 end
 
 
----------------------------------------------------------------------------------END STUFF THAT JUST WORKS
+--------------------------------------------------------------------------------- Trying to find when the kart leaves the track
 
 
 
 
+function get_tiles()
+    tiles = {}
+    for z = -165, 165, 30 do
+        for x = 344, 13, -30 do
+            local tile = {}
+            tile.n = #tiles + 1
+            tile.x = x * k_cos - z * k_sin + kart_x
+            tile.z = x * k_sin + z * k_cos + kart_z
+            tile.t = get_tile_attribute(tile.x, tile.z)
+            tiles[#tiles + 1] = tile
+        end
+    end
+end
 
+function get_tile_attribute(x, z)
+    for i, section in ipairs(the_course) do
+        if in_section(x, z, section) then
+            return section.attribute   --If it is a track piece (THIS NEVER IS CORRECT)
+        else
+            return "noAttribute"
+        end
+    end
+end
 
-
-
-
-
-
-
-
+function in_section(x, z, s)
+    local b1 = t_sign(x, z, s.p1,   s.p2)    < 0
+    local b2 = t_sign(x, z, s.p2,   s.p3)  < 0
+    local b3 = t_sign(x, z, s.p3, s.p1)    < 0
+    local b4 = s.p1.y   > kart_y - 74 and s.p1.y   < kart_y + 74
+    local b5 = s.p2.y   > kart_y - 74 and s.p2.y   < kart_y + 74
+    local b6 = s.p3.y > kart_y - 74 and s.p3.y < kart_y + 74
+    return (((b1 == b2) and (b2 == b3)) and b4 and b5 and b6)
+end
+ 
+function t_sign(x, z, p2, p3)
+    return (x - p3.x) * (p2.z - p3.z) - (p2.x - p3.x) * (z - p3.z)
+end
 
 
 
@@ -442,6 +474,13 @@ end
 
 
 --------------------------------------------------------------------------END selecting the best species
+
+
+
+
+
+
+
 --resets controller input
 function clear_controller()
     controller = {}
@@ -522,10 +561,23 @@ function play()
     if correct_game ~= true then
         print("This is not the correct ROM, need Mario Kart 64 (USA)")
     end
-    
+
+    get_tiles()
+    notOTrack = false
+
     while correct_game do
-        --
-        if(frame_count>180 and ((kart_x < -185 or -91 < kart_x) or (distance < prev_distance or util.readVelocity() < VELOCITY_THRESHOLD))) then
+        -- if((frame_count>180 and --more than 3 seconds and  
+        --      (notOnTrack or  -- not on Track or
+        --      distance < prev_distance or util.readVelocity() < VELOCITY_THRESHOLD))) then --not going forward or velocity isn't fast enough
+        --     next_species()
+        -- elseif(current_species > num_species) then
+        --     next_generation()
+        -- else 
+        --     refresh()
+        --     display_info()
+        -- end
+        if(frame_count>180 and --more than 3 seconds and  
+             (distance < prev_distance or util.readVelocity() < VELOCITY_THRESHOLD)) then --not going forward or velocity isn't fast enough
             next_species()
         elseif(current_species > num_species) then
             next_generation()
@@ -546,6 +598,7 @@ function play()
             fitness = fitness + get_fitness_score()
             prev_distance = distance 
             previous_time = time 
+            get_tiles()
         end
 
 
