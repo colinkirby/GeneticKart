@@ -19,8 +19,24 @@ function initialize_things()
 
 ----------------------------------------------------------------------------Stuff not to worry about-----------------------------------------------------------------
 	state_file = "states/tt/LR.state"
-    file = io.open("fitness.txt", "a")
-    file:write("New Iteration" , "\n")
+    csv_file = io.open("data.csv", "a")
+
+    --Parameter information
+    csv_file:write("Number of Species" , num_species , "," ,
+                    "Mutation Rate" , mutation_rate , "," ,
+                    "Genome Size" , genome_size)
+
+    csv_file:write("")
+
+    csv_headers = {
+        "Generation",
+        "Species",
+        "Fitness"}
+
+    for i = 1, #csv_headers do
+        csv_file:write(csv_headers[i] , ",")
+    end
+    
 
     -- TODO add bumpers?
     button_input_names = {
@@ -172,9 +188,11 @@ function initialize_things()
     --weights that should be optimized
     num_species = 10
     mutation_rate = 0.05 --Can be from 0.00 to 1.00
-    frame_interval = 5
     genome_size = 1000
 
+
+    frame_interval = 5
+    VELOCITY_THRESHOLD = 1.2
 
 
     generation_max_fitness = 0
@@ -189,7 +207,7 @@ function initialize_things()
     time_segment = 0
 
 
-    VELOCITY_THRESHOLD = 1.2
+    
 
 
 
@@ -251,7 +269,6 @@ function display_info()
 	gui.drawText(-2, 212, "Generation:"..current_generation, black, none)
     gui.drawText(105, 212, "Species:"..current_species, black, none)
     gui.drawText(185, 212, "Fitness:".. round(fitness), black, none)
-    gui.drawText(205, 212, "onTrack:".. yesOrNo(onTrack))
     gui.drawText(-1, 224, "World Max Fitness:"..round(world_max_fitness), blue, none)
     gui.drawText(175, 224, "Gen. Max Fitness:"..round(generation_max_fitness), black, none)
 end
@@ -301,50 +318,6 @@ function gene_to_controller(gene)
 end
 
 
---------------------------------------------------------------------------------- Trying to find when the kart leaves the track
-
-
-
-
-function get_tiles()
-    tiles = {}
-    for z = -165, 165, 30 do
-        for x = 344, 13, -30 do
-            local tile = {}
-            tile.n = #tiles + 1
-            tile.x = x * k_cos - z * k_sin + kart_x
-            tile.z = x * k_sin + z * k_cos + kart_z
-            tile.t = get_tile_attribute(tile.x, tile.z)
-            tiles[#tiles + 1] = tile
-        end
-    end
-end
-
-function get_tile_attribute(x, z)
-    for i, section in ipairs(the_course) do
-        if in_section(x, z, section) then
-            return section.attribute   --If it is a track piece (THIS NEVER IS CORRECT)
-        else
-            return "noAttribute"
-        end
-    end
-end
-
-function in_section(x, z, s)
-    local b1 = t_sign(x, z, s.p1,   s.p2)    < 0
-    local b2 = t_sign(x, z, s.p2,   s.p3)  < 0
-    local b3 = t_sign(x, z, s.p3, s.p1)    < 0
-    local b4 = s.p1.y   > kart_y - 74 and s.p1.y   < kart_y + 74
-    local b5 = s.p2.y   > kart_y - 74 and s.p2.y   < kart_y + 74
-    local b6 = s.p3.y > kart_y - 74 and s.p3.y < kart_y + 74
-    return (((b1 == b2) and (b2 == b3)) and b4 and b5 and b6)
-end
- 
-function t_sign(x, z, p2, p3)
-    return (x - p3.x) * (p2.z - p3.z) - (p2.x - p3.x) * (z - p3.z)
-end
-
-
 
 -------------------------------------------------------------------------------Creating each generation of species------------------------------------------
 --GENERATE POPULATION
@@ -358,8 +331,6 @@ function initialize_population()
             distance = 0,
         }
     end
-    file:write("Gen: ".. current_generation, "\n")
-    file:flush()
 end 
 
 --generates the genome
@@ -495,8 +466,6 @@ end
 
 --resets variables, moves to next species
 function next_species()
-    file:write(fitness, "\n")
-    file:flush()
 
     generation[current_species].furthest_gene_reached = current_gene
     generation[current_species].fitness = fitness
@@ -538,7 +507,6 @@ function next_generation()
     current_generation = current_generation + 1
     generation_max_fitness = 0
     current_species = 1
-    file:write("Gen: ".. current_generation, "\n")
 end  
 
 
@@ -554,6 +522,11 @@ function get_fitness_score()
 end
 
 
+function write_to_csv()
+    csv_file:write("hello")
+end
+
+
 function play()
     game = gameinfo.getromname()
     correct_game = "Mario Kart 64 (USA)" == game
@@ -562,22 +535,10 @@ function play()
         print("This is not the correct ROM, need Mario Kart 64 (USA)")
     end
 
-    get_tiles()
-    notOTrack = false
-
     while correct_game do
-        -- if((frame_count>180 and --more than 3 seconds and  
-        --      (notOnTrack or  -- not on Track or
-        --      distance < prev_distance or util.readVelocity() < VELOCITY_THRESHOLD))) then --not going forward or velocity isn't fast enough
-        --     next_species()
-        -- elseif(current_species > num_species) then
-        --     next_generation()
-        -- else 
-        --     refresh()
-        --     display_info()
-        -- end
-        if(frame_count>180 and --more than 3 seconds and  
-             (distance < prev_distance or util.readVelocity() < VELOCITY_THRESHOLD)) then --not going forward or velocity isn't fast enough
+        if((frame_count>180 and --more than 3 seconds and
+             (distance < prev_distance or util.readVelocity() < VELOCITY_THRESHOLD))) then --not going forward or velocity isn't fast enough
+            write_to_csv()
             next_species()
         elseif(current_species > num_species) then
             next_generation()
@@ -600,7 +561,6 @@ function play()
             previous_time = time 
             get_tiles()
         end
-
 
         emu.frameadvance()
     end
