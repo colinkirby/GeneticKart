@@ -4,38 +4,9 @@
 local util = require(".util")
 
 function initialize_things()
-    local verbose = true
     console.clear()
-
-
-
-
-
-
-
-
-
-
-
 ----------------------------------------------------------------------------Stuff not to worry about-----------------------------------------------------------------
 	state_file = "states/tt/LR.state"
-    csv_file = io.open("data.csv", "a")
-
-    --Parameter information
-    csv_file:write("Number of Species" , num_species , "," ,
-                    "Mutation Rate" , mutation_rate , "," ,
-                    "Genome Size" , genome_size)
-
-    csv_file:write("")
-
-    csv_headers = {
-        "Generation",
-        "Species",
-        "Fitness"}
-
-    for i = 1, #csv_headers do
-        csv_file:write(csv_headers[i] , ",")
-    end
     
 
     -- TODO add bumpers?
@@ -188,11 +159,37 @@ function initialize_things()
     --weights that should be optimized
     num_species = 10
     mutation_rate = 0.05 --Can be from 0.00 to 1.00
-    genome_size = 1000
+    genome_size = 10000
 
+    csv_file = io.open("data.csv", "a")
+
+    --Parameter information
+    csv_file:write("Number of Species = " .. num_species .. ",")
+    csv_file:write("Mutation Rate = " .. mutation_rate .. ",")
+    csv_file:write("Genome Size = " .. genome_size)
+
+    csv_file:write("\n")
+    csv_file:write("\n")
+
+
+    csv_headers = {
+        "Generation",
+        "Species",
+        "Fitness",
+        "Furthest Gene",
+        "Distance"}
+
+    for i = 1, #csv_headers, 1 do
+        csv_file:write(csv_headers[i] , ",")
+    end
+
+    csv_file:flush()
+
+
+    percentageOfBestGenomeToKeep = 0.75
 
     frame_interval = 5
-    VELOCITY_THRESHOLD = 1.2
+    VELOCITY_THRESHOLD = 3.55
 
 
     generation_max_fitness = 0
@@ -270,7 +267,7 @@ function display_info()
     gui.drawText(105, 212, "Species:"..current_species, black, none)
     gui.drawText(185, 212, "Fitness:".. round(fitness), black, none)
     gui.drawText(-1, 224, "World Max Fitness:"..round(world_max_fitness), blue, none)
-    gui.drawText(175, 224, "Gen. Max Fitness:"..round(generation_max_fitness), black, none)
+    gui.drawText(168, 224, "Gen. Max Fitness:"..round(generation_max_fitness), black, none)
 end
 
 function yesOrNo(bool)
@@ -365,36 +362,39 @@ end
 
 ------------------------------------------------------------------selecting the best species---------------------------------------------------
 function select_best_species()
-    generation_fitnesses = {}
+    the_generation_fitnesses = {}
 
-    temp_generation = clone(most_fit_species)       --TRY REMOVING, MAY NOT NEED THIS EXPLICIT DELETION
+    the_next_generation = clone(most_fit_species)       --TRY REMOVING, MAY NOT NEED THIS EXPLICIT DELETION
+    if(the_next_generation[1].genome == the_next_generation[2].genome) then
+        print("The next generation's first species genome is the same as the second")
+    end
     generation = {} 
-    generation = temp_generation
+    generation = the_next_generation
 end  
 
 --function for copying tables
 function clone(most_fit_species)
     new_generation = {}
-
+    
     for species = 1, num_species do
-        new_genome = {}
+        local new_genome = {}
 
-        --Copy the most fit geneome over until the futhest gene it reached
+        --Copy the most fit genome over until the futhest gene it reached
         for i = 1, most_fit_species.furthest_gene_reached do
             new_genome[#new_genome + 1] = most_fit_species.genome[i]
         end
 
-        --Mutate that genome
+        --Mutate that genome copied genome
         mutate(new_genome)
 
-        --Add on the rest of the genome until genome_size is reached
-        for i = #new_genome+1, genome_size do
+        --Add on the rest of random genome until genome_size is reached
+        for i = (#new_genome+1), genome_size do
             new_genome[i] = new_gene()
         end
 
         --Save genome as a new species
         new_generation[#new_generation+1] = {
-            id = i,
+            id = species,
             genome = new_genome,
             furthest_gene_reached = 0,
             fitness = 0,
@@ -408,15 +408,17 @@ end
 --iterates through every gene and mutates based on mutation probability
 function mutate(subgenome)
     local mutation_percentage = mutation_rate * 100
-    for i = 1, #subgenome do 
+    ---We want to keep the first percentage of the genome, mutate the last few
+    ---in the hopes that the bad genes were only at the end
+    for mutationIndex = round(#subgenome*percentageOfBestGenomeToKeep), #subgenome do 
         local num = math.random(1, 100)
         if(num <= mutation_percentage) then
-            local gene = subgenome[i]
+            local gene = subgenome[mutationIndex]
             local mutated_gene = new_gene()
             while(gene == mutated_gene) do 
                 mutated_gene = new_gene()
             end
-            subgenome[i] = mutated_gene
+            subgenome[mutationIndex] = mutated_gene
         end
     end
     return subgenome
@@ -523,7 +525,14 @@ end
 
 
 function write_to_csv()
-    csv_file:write("hello")
+
+    csv_file:write("\n")
+    csv_file:write(current_generation .. ",")
+    csv_file:write(current_species .. ",")
+    csv_file:write(fitness .. ",")
+    csv_file:write(current_gene .. ",")
+    csv_file:write(distance)
+    csv_file:flush()
 end
 
 
@@ -536,7 +545,7 @@ function play()
     end
 
     while correct_game do
-        if((frame_count>180 and --more than 3 seconds and
+        if((frame_count>210 and --more than 3.5 seconds and
              (distance < prev_distance or util.readVelocity() < VELOCITY_THRESHOLD))) then --not going forward or velocity isn't fast enough
             write_to_csv()
             next_species()
@@ -558,8 +567,7 @@ function play()
         if(distance % 5 == 0 and distance ~= prev_distance) then
             fitness = fitness + get_fitness_score()
             prev_distance = distance 
-            previous_time = time 
-            get_tiles()
+            previous_time = time
         end
 
         emu.frameadvance()
