@@ -160,8 +160,9 @@ function initialize_things()
     num_species = 10
     mutation_rate = 0.05 --Can be from 0.00 to 1.00
     genome_size = 10000
+    percentageOfBestGenomeToKeep = 0.80
 
-    csv_file = io.open("data.csv", "a")
+    csv_file = io.open("./SavedData/data90NEW.csv", "a")
 
     --Parameter information
     csv_file:write("Number of Species = " .. num_species .. ",")
@@ -186,7 +187,7 @@ function initialize_things()
     csv_file:flush()
 
 
-    percentageOfBestGenomeToKeep = 0.75
+    
 
     frame_interval = 5
     VELOCITY_THRESHOLD = 3.55
@@ -268,14 +269,6 @@ function display_info()
     gui.drawText(185, 212, "Fitness:".. round(fitness), black, none)
     gui.drawText(-1, 224, "World Max Fitness:"..round(world_max_fitness), blue, none)
     gui.drawText(168, 224, "Gen. Max Fitness:"..round(generation_max_fitness), black, none)
-end
-
-function yesOrNo(bool)
-    if(bool)then
-        return "Yes"
-    else
-        return "No"
-    end
 end
 
 
@@ -363,13 +356,7 @@ end
 ------------------------------------------------------------------selecting the best species---------------------------------------------------
 function select_best_species()
     the_generation_fitnesses = {}
-
-    the_next_generation = clone(most_fit_species)       --TRY REMOVING, MAY NOT NEED THIS EXPLICIT DELETION
-    if(the_next_generation[1].genome == the_next_generation[2].genome) then
-        print("The next generation's first species genome is the same as the second")
-    end
-    generation = {} 
-    generation = the_next_generation
+    generation = clone(most_fit_species)
 end  
 
 --function for copying tables
@@ -377,20 +364,36 @@ function clone(most_fit_species)
     new_generation = {}
     
     for species = 1, num_species do
-        local new_genome = {}
+        new_genome = {}
+
 
         --Copy the most fit genome over until the futhest gene it reached
-        for i = 1, most_fit_species.furthest_gene_reached do
-            new_genome[#new_genome + 1] = most_fit_species.genome[i]
+        for i = #new_genome+1, most_fit_species.furthest_gene_reached do
+            new_genome[i] = most_fit_species.genome[i]
         end
 
-        --Mutate that genome copied genome
-        mutate(new_genome)
+
+        ---Mutate the copied genome
+        ---We want to keep the first percentage of the genome, mutate the last few
+        ---in the hopes that the bad genes were only at the end
+        local mutation_percentage = mutation_rate * 100
+        for mutationIndex = round(#new_genome*percentageOfBestGenomeToKeep), #new_genome do 
+            local num = math.random(1, 100)
+            if(num <= mutation_percentage) then
+                local gene = new_genome[mutationIndex]
+                local mutated_gene = new_gene()
+                while(gene == mutated_gene) do 
+                    mutated_gene = new_gene()
+                end
+                new_genome[mutationIndex] = mutated_gene
+            end
+        end
 
         --Add on the rest of random genome until genome_size is reached
         for i = (#new_genome+1), genome_size do
             new_genome[i] = new_gene()
         end
+
 
         --Save genome as a new species
         new_generation[#new_generation+1] = {
@@ -406,23 +409,7 @@ function clone(most_fit_species)
 end
 
 --iterates through every gene and mutates based on mutation probability
-function mutate(subgenome)
-    local mutation_percentage = mutation_rate * 100
-    ---We want to keep the first percentage of the genome, mutate the last few
-    ---in the hopes that the bad genes were only at the end
-    for mutationIndex = round(#subgenome*percentageOfBestGenomeToKeep), #subgenome do 
-        local num = math.random(1, 100)
-        if(num <= mutation_percentage) then
-            local gene = subgenome[mutationIndex]
-            local mutated_gene = new_gene()
-            while(gene == mutated_gene) do 
-                mutated_gene = new_gene()
-            end
-            subgenome[mutationIndex] = mutated_gene
-        end
-    end
-    return subgenome
-end 
+
 
 
 function round(num, idp)
@@ -482,10 +469,10 @@ function next_species()
 
     if(fitness > generation_max_fitness) then
         generation_max_fitness = fitness
-        most_fit_species = generation[current_species]
     end  
     if(fitness > world_max_fitness) then
         world_max_fitness = fitness
+        most_fit_species = generation[current_species]
     end
 
     frame_count = -1
@@ -494,7 +481,7 @@ function next_species()
     time_segment = 0
 
     fitness = 0
-    distnace = 0
+    distance = 0
     current_gene = 1
 
     clear_controller()
@@ -512,7 +499,7 @@ function next_generation()
 end  
 
 
---compute fitness NEEDS TO BE REVAMPED
+--compute fitness
 function get_fitness_score()
     local score = 0
     time_segment = time - previous_time
@@ -525,7 +512,6 @@ end
 
 
 function write_to_csv()
-
     csv_file:write("\n")
     csv_file:write(current_generation .. ",")
     csv_file:write(current_species .. ",")
@@ -535,20 +521,33 @@ function write_to_csv()
     csv_file:flush()
 end
 
+function printGenome()
+    local str = ""
 
+    print("ID: " .. generation[current_species-1].id)
+    print("Furthest Gene: " .. generation[current_species-1].furthest_gene_reached)
+    for i = 1, generation[current_species-1].furthest_gene_reached do
+        str = str .. generation[current_species-1].genome[i]
+    end
+    print(str)
+end
 function play()
     game = gameinfo.getromname()
     correct_game = "Mario Kart 64 (USA)" == game
-    initialize_things()
     if correct_game ~= true then
         print("This is not the correct ROM, need Mario Kart 64 (USA)")
     end
 
+    initialize_things()
     while correct_game do
+        local verbose = false
         if((frame_count>210 and --more than 3.5 seconds and
              (distance < prev_distance or util.readVelocity() < VELOCITY_THRESHOLD))) then --not going forward or velocity isn't fast enough
             write_to_csv()
             next_species()
+            if verbose then
+                printGenome()
+            end
         elseif(current_species > num_species) then
             next_generation()
         else 
