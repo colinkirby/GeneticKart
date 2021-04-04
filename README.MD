@@ -12,7 +12,7 @@ Instructions
 3. Get Mario Kart 64 (USA) rom, easy to find with quick google search
     -Important that it is the USA version of the ROM
 4. Open ROM in Bizhawk (Emuhawk)
-5. Go to tools -> lua console -> script -> open script, then open the Play.lua script in this directory
+5. Go to tools -> lua console -> script -> open script, then open the Broken.lua script in this directory
 6. Run for a while, adjust weights as desired. Fitness score data will be saved into fitness.txt
 
 Special thanks to
