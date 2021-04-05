@@ -190,7 +190,7 @@ function initialize_things()
     
 
     frame_interval = 5
-    VELOCITY_THRESHOLD = 3.55
+    VELOCITY_THRESHOLD = 4.0
 
 
     generation_max_fitness = 0
@@ -332,16 +332,16 @@ function new_genome()
     return genome 
 end 
 
---generates a new gene 00 = forward, 01 = right, 10 = left
+--generates a new gene 10 = left, 01 = right, 00 = forward
 function new_gene()
     local gene = ""
-    local r = math.random(0,2)
+    local r = math.random(0,3)
     if(r == 0) then
-        gene = "00"
+        gene = "10"
     elseif(r == 1) then 
         gene = "01"
     else
-        gene = "10"
+        gene = "00" --usually get forward commands
     end
     return gene 
 end 
@@ -377,7 +377,7 @@ function clone(most_fit_species)
         ---We want to keep the first percentage of the genome, mutate the last few
         ---in the hopes that the bad genes were only at the end
         local mutation_percentage = mutation_rate * 100
-        for mutationIndex = round(#new_genome*percentageOfBestGenomeToKeep), #new_genome do 
+        for mutationIndex = round(#new_genome*percentageOfBestGenomeToKeep), #new_genome do --I think this should change if I keep working on this
             local num = math.random(1, 100)
             if(num <= mutation_percentage) then
                 local gene = new_genome[mutationIndex]
@@ -541,8 +541,8 @@ function play()
     initialize_things()
     while correct_game do
         local verbose = false
-        if((frame_count>210 and --more than 3.5 seconds and
-             (distance < prev_distance or util.readVelocity() < VELOCITY_THRESHOLD))) then --not going forward or velocity isn't fast enough
+        if((frame_count>300 and --more than 5 seconds and not going forward or velocity isn't fast enough
+             (distance < prev_distance or util.readVelocity() < VELOCITY_THRESHOLD))) then 
             write_to_csv()
             next_species()
             if verbose then
