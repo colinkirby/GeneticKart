@@ -1,13 +1,13 @@
---Written by Colin Kirby
+--Written by Colin Kirby and David Barrette
 --Open this file on emulator to run genetic algorithm
 
 local util = require(".util")
 
 function initialize_things()
     console.clear()
+----------------------------------------------------------------------------Stuff not to worry about-----------------------------------------------------------------
 	state_file = "states/tt/LR.state"
-    file = io.open("fitness.txt", "a")
-    file:write("New Iteration" , "\n")
+    
 
     -- TODO add bumpers?
     button_input_names = {
@@ -25,9 +25,7 @@ function initialize_things()
     
 
     num_buttons = #button_actual_names
- 
     course = {}
- 
     -- collision address
     course.col_addresses = {
     0x1D65A0,  -- Mario Raceway
@@ -73,7 +71,6 @@ function initialize_things()
     "",
     2,
     ""}
- 
     course.names = {
     "Mario Raceway      ",
     "Choco Mountain     ",
@@ -95,9 +92,7 @@ function initialize_things()
     "Double Deck        ",
     "DK's Jungle Parkway",
     "Big Donut          "}
- 
     savestate.load(state_file)
- 
     course.selected_addr = 0xDC5A0
     course.number = mainmemory.read_u16_be(course.selected_addr) + 1
     course.name = course.names[course.number]
@@ -109,10 +104,8 @@ function initialize_things()
     course.p2_offset = 0x15
     course.p3_offset = 0x19
     course.tr_attr = course.track_attribute[course.number]
- 
     -- this loads the map, just the track sections though
     load_map()
- 
     -- kart data
     kart = {}
     kart.x_addr = 0x0F69A4
@@ -124,10 +117,8 @@ function initialize_things()
     dist_addr = 0x16328A
     kart.sin = 0xF6B04
     kart.cos = 0xF6B0C
- 
     character_addr = 0x0DC53B
     character = mainmemory.read_u8(character_addr)
- 
     -- object addresses
     obj = {}
     obj.addr = 0x15F9B8
@@ -136,7 +127,6 @@ function initialize_things()
     obj.x_offset = 0x18
     obj.y_offset = 0x1C
     obj.z_offset = 0x20
- 
     -- some colors
     black  = 0xFF000000
     white  = 0xFFFFFFFF
@@ -163,40 +153,80 @@ function initialize_things()
     0x0, --
     0x0, --
     0x0} --
- 
+ --------------------------------------------------------------------------END Stuff Not to worry about
+
+
     --weights that should be optimized
-    population_size = 100
-    mutation_rate = 0.02
+    num_species = 10
+    mutation_rate = 0.05 --Can be from 0.00 to 1.00
+    genome_size = 10000
+    percentageOfBestGenomeToKeep = 0.80
+
+    csv_file = io.open("./SavedData/data90NEW.csv", "a")
+
+    --Parameter information
+    csv_file:write("Number of Species = " .. num_species .. ",")
+    csv_file:write("Mutation Rate = " .. mutation_rate .. ",")
+    csv_file:write("Genome Size = " .. genome_size)
+
+    csv_file:write("\n")
+    csv_file:write("\n")
+
+
+    csv_headers = {
+        "Generation",
+        "Species",
+        "Fitness",
+        "Furthest Gene",
+        "Distance"}
+
+    for i = 1, #csv_headers, 1 do
+        csv_file:write(csv_headers[i] , ",")
+    end
+
+    csv_file:flush()
+
+
+    
+
     frame_interval = 5
-    genome_size = 1000
+    VELOCITY_THRESHOLD = 4.0
 
 
-
-    max_nodes = 1000000
-
-    fitness = 0
-    total_fitness = 0
+    generation_max_fitness = 0
     current_species = 1
     current_generation = 1
-    current_gene = 1
-    distance = -2
+    generation = {}
+    generation_fitnesses = {}
 
     frame_count = -1
-    previous_distance = -2
+    time = 0
     previous_time = 0
     time_segment = 0
-    max_fitness = 0
 
-    --weights for progress
-    --weights = {}
-    generation = {}
-    generation_fitness = {}
-    gene_reached = {}
+
+    
+
+
+
+    ------Global Vars
+    current_gene = 1
+    fitness = 0
+    distance = 0
+    prev_distance = -2
+    most_fit_species = {}
+    tiles = {}
+    world_max_fitness = 0
+
     initialize_population()
-
     clear_controller()
 end -- end initialize_things
 
+
+
+
+
+-------------------------------------------------------------------------------Loading the map
 function load_map()
     the_course = {}
     -- TODO find where the collision addresses end for each track
@@ -231,242 +261,14 @@ function load_map()
     end
 end
 
-
-
---GENERATE POPULATION
-
-function initialize_population()
-    local genome = {}
-    for i = 1, population_size do
-        for j = 1, genome_size do
-            genome[#genome + 1] = new_gene()
-        end
-        generation[#generation + 1] = genome
-        genome = {}
-    end
-    file:write("Gen: ".. current_generation, "\n")
-    file:flush()
-end 
-
-
---generates a new gene 00 = forward, 01 = right, 10 = left
-function new_gene()
-    local gene = ""
-    local r = math.random(0,2)
-    if(r == 0) then
-        gene = "00"
-    elseif(r == 1) then 
-        gene = "01"
-    else
-        gene = "10"
-    end
-    return gene 
-end 
-
---takes gene input and gives controller instructions 
-function gene_to_controller(gene) 
-    local left = (gene == "10")
-    local right = (gene == "01")
-
-    for i,v in ipairs(button_input_names) do
-        if(i == 2) then
-            controller[v] = left
-        elseif(i == 3)  then   
-            controller[v] = right 
-        end 
-    end 
-end
-
---compute fitness
-function get_fitness_score()
-    local score = 0
-    time_segment = time - previous_time
-
-    if(distance > -1) then
-        score = (1 / time_segment)
-    end
-    return score
-end
-
-
---selects species for reproduction based on fitness weighted random selection
-function select_best_species()
-    local normalized_fitness = {}
-    local normalized_accumulated_fitness = {}
-    local prev = 0
-
-    --this is inneficiant, but my knowledge of lua is limited
-    --TODO
-    --Make each genome an object, with a list of genes, and a fitness score
-    local temp_fitness = shallowCopy(generation_fitness)
-    local sorted_order = {}
-    table.sort(temp_fitness)
-    for i, val1 in ipairs(temp_fitness) do
-        for j, val2 in ipairs(generation_fitness) do 
-            if(val1 == val2) then 
-                sorted_order[#sorted_order + 1] = j
-            end
-        end
-    end 
-
-    --normalize
-    for _, fit in ipairs(generation_fitness) do
-        normalized_fitness[#normalized_fitness + 1] = (fit / total_fitness) * 100
-    end
-
-    --accumulated normalized values
-    table.sort(normalized_fitness)
-    for i,v in ipairs(normalized_fitness) do 
-        local val = prev + normalized_fitness[i]
-        normalized_accumulated_fitness[i] = val
-        prev = val
-    end 
-    
-    temp_gen = {}
-
-    --randomly select 2 at a time until the number selected reaches the population size
-    for i = 1, population_size/2 do 
-        local p1 = choose_parent(normalized_accumulated_fitness, sorted_order)
-        local p2 = p1
-        while(p1 == p2) do
-            p2 = choose_parent(normalized_accumulated_fitness, sorted_order)
-        end 
-        crossover(p1, p2)
-    end 
-
-    generation = {}
-    generation_fitness = {}
-    gene_reached = {}
-    total_fitness = 0
-    generation = shallowCopy(temp_gen)
-end  
-
---does the random (weighted) selection
-function choose_parent(normalized_accumulated_fitness, sorted_order)
-    local parent = 0
-    local num = math.random(1,100)
-    for i,v in ipairs(normalized_accumulated_fitness) do
-        if num <= v then
-            return sorted_order[i]
-        end
-    end    
-    return 0
-end 
-
---function for copying tables
-function shallowCopy(original)
-    local copy = {}
-    for key, value in pairs(original) do
-        copy[key] = value
-    end
-    return copy
-end
-
-function round(num, idp)
-	local mult = 10^(idp or 0)
-	return math.floor(num * mult + 0.5) / mult
-end
-
---crosses over inputted parents at randomized mutation point in the genome
-function crossover(p1, p2) 
-    local child1 = {}
-    local child2 = {}
-
-    max_gene_reached = math.max(gene_reached[p1], gene_reached[p2])
-    crossover_point = math.random(1, max_gene_reached)
-
-    for i = 1, crossover_point do 
-        child1[#child1 + 1] = generation[p1][i]
-        child2[#child2 + 1] = generation[p2][i]
-    end
-
-
-    for j = crossover_point + 1, genome_size do
-        child1[#child1 + 1] = generation[p2][j]
-        child2[#child2 + 1] = generation[p1][j]
-    end
-
-
-
-    
-
-    child1 = mutate(child1)
-    child2 = mutate(child2)
-
-    temp_gen[#temp_gen + 1] = child1
-    temp_gen[#temp_gen + 1] = child2
-end 
-
---iterates through every gene and mutates based on mutation probability
-function mutate(c)
-    local mutate_num = mutation_rate * 1000
-    for i = 1, #c do 
-        local num = math.random(1, 1000)
-        if(num <= mutate_num) then
-            local gene = c[i]
-            local mutated_gene = new_gene()
-            while(gene == mutated_gene) do 
-                mutated_gene = new_gene()
-            end
-            c[i] = mutated_gene
-        end
-    end
-    return c
-end 
-
---resets controller input
-function clear_controller()
-    controller = {}
-    for i,v in ipairs(button_input_names) do
-        if(i == 1) then
-            controller[v] = true
-        else          
-            controller[v] = false
-        end 
-    end 
-end
-
---resets variables, moves to next species
-function next_species()
-    file:write(fitness, "\n")
-    file:flush()
-    gene_reached[#gene_reached + 1] = current_gene
-    generation[#generation + 1] = generation[current_species]
-    generation_fitness[#generation_fitness + 1] = fitness
-    total_fitness = total_fitness + fitness
-    if(fitness > max_fitness) then
-        max_fitness = fitness
-    end  
-    fitness = 0 
-    current_species = current_species + 1
-    frame_count = -1
-    previous_distance = -2
-    previous_time = 0
-    current_gene = 1
-    time_segment = 0
-    clear_controller()
-
-    savestate.load(state_file)
-end
-
---proceeds to the next generation 
-function next_generation()
-    current_generation = current_generation + 1
-    current_species = 1
-    file:write("Gen: ".. current_generation, "\n")
-    select_best_species()
-end  
-
---renders information
+----------------------------------------------------------------------------------------------render information
 function display_info()
 	gui.drawBox(-1, 214, 320, 240, none, bwhite)
-	-- gui.drawText(-2, 212, course.name, black, none)
 	gui.drawText(-2, 212, "Generation:"..current_generation, black, none)
-	gui.drawText(120, 212, "Species:"..current_species, black, none)
-    gui.drawText(
-		120, 224, "Max Fitness:"..round(max_fitness), black, none
-		)
-    gui.drawText(-1, 224, "Fitness:".. round(fitness), black, none)
+    gui.drawText(105, 212, "Species:"..current_species, black, none)
+    gui.drawText(185, 212, "Fitness:".. round(fitness), black, none)
+    gui.drawText(-1, 224, "World Max Fitness:"..round(world_max_fitness), blue, none)
+    gui.drawText(168, 224, "Gen. Max Fitness:"..round(generation_max_fitness), black, none)
 end
 
 
@@ -491,38 +293,286 @@ function refresh()
     XYZspeed = math.sqrt (kart_xv^2+kart_yv^2+kart_zv^2)
 end
 
+-----------------------------------------------------------------------------------takes gene input and gives controller instructions 
+function gene_to_controller(gene) 
+    local left = (gene == "10")
+    local right = (gene == "01")
 
-game = gameinfo.getromname()
-right_game = "Mario Kart 64 (USA)" == game
-initialize_things()
- 
-while right_game do
-    if(distance < previous_distance or time_segment > 1.5 or (util.readVelocity() < 1 and distance > 0)) then
-        next_species()
+    for i,v in ipairs(button_input_names) do
+        if(i == 2) then
+            controller[v] = left
+        elseif(i == 3)  then   
+            controller[v] = right 
+        end 
     end 
-
-    if(current_species > population_size) then
-        next_generation()
-    end
-
-    refresh()
-    display_info()
-
-    if(frame_count % frame_interval == 0) then
-        gene_to_controller(generation[current_species][current_gene])
-        current_gene = current_gene + 1
-    end
-
-    joypad.set(controller)
-    if(distance % 5 == 0 and distance ~= previous_distance) then
-     fitness = fitness + get_fitness_score()
-     previous_distance = distance 
-     previous_time = time 
-    end
-
-
-
-	emu.frameadvance()
 end
+
+
+
+-------------------------------------------------------------------------------Creating each generation of species------------------------------------------
+--GENERATE POPULATION
+function initialize_population()
+    for i = 1, num_species do
+        generation[#generation + 1] = {
+            id = i,
+            genome = new_genome(genome_size),
+            furthest_gene_reached = 0, --Time spent playing is tied with this
+            fitness = 0,
+            distance = 0,
+        }
+    end
+end 
+
+--generates the genome
+function new_genome()
+    local genome = {}
+    for i = 1, genome_size do
+        genome[#genome+1] = new_gene()
+    end
+    return genome 
+end 
+
+--generates a new gene 10 = left, 01 = right, 00 = forward
+function new_gene()
+    local gene = ""
+    local r = math.random(0,3)
+    if(r == 0) then
+        gene = "10"
+    elseif(r == 1) then 
+        gene = "01"
+    else
+        gene = "00" --usually get forward commands
+    end
+    return gene 
+end 
+
+
+----------------------------------------------------------------------------END create new generation's species
+
+
+
+
+
+------------------------------------------------------------------selecting the best species---------------------------------------------------
+function select_best_species()
+    the_generation_fitnesses = {}
+    generation = clone(most_fit_species)
+end  
+
+--function for copying tables
+function clone(most_fit_species)
+    new_generation = {}
+    
+    for species = 1, num_species do
+        new_genome = {}
+
+
+        --Copy the most fit genome over until the futhest gene it reached
+        for i = #new_genome+1, most_fit_species.furthest_gene_reached do
+            new_genome[i] = most_fit_species.genome[i]
+        end
+
+
+        ---Mutate the copied genome
+        ---We want to keep the first percentage of the genome, mutate the last few
+        ---in the hopes that the bad genes were only at the end
+        local mutation_percentage = mutation_rate * 100
+        for mutationIndex = round(#new_genome*percentageOfBestGenomeToKeep), #new_genome do --I think this should change if I keep working on this
+            local num = math.random(1, 100)
+            if(num <= mutation_percentage) then
+                local gene = new_genome[mutationIndex]
+                local mutated_gene = new_gene()
+                while(gene == mutated_gene) do 
+                    mutated_gene = new_gene()
+                end
+                new_genome[mutationIndex] = mutated_gene
+            end
+        end
+
+        --Add on the rest of random genome until genome_size is reached
+        for i = (#new_genome+1), genome_size do
+            new_genome[i] = new_gene()
+        end
+
+
+        --Save genome as a new species
+        new_generation[#new_generation+1] = {
+            id = species,
+            genome = new_genome,
+            furthest_gene_reached = 0,
+            fitness = 0,
+            distance = 0
+        }
+    end
+
+    return new_generation
+end
+
+--iterates through every gene and mutates based on mutation probability
+
+
+
+function round(num, idp)
+    if(num ~= 0) then
+        local mult = 10^(idp or 0)
+        return math.floor(num * mult + 0.5) / mult
+    else
+        return 0
+    end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+--------------------------------------------------------------------------END selecting the best species
+
+
+
+
+
+
+
+--resets controller input
+function clear_controller()
+    controller = {}
+    for i,v in ipairs(button_input_names) do
+        if(i == 1) then
+            controller[v] = true
+        else          
+            controller[v] = false
+        end 
+    end 
+end
+
+--resets variables, moves to next species
+function next_species()
+
+    generation[current_species].furthest_gene_reached = current_gene
+    generation[current_species].fitness = fitness
+    generation[current_species].distance = distance
+
+--Total generation fitness
+    if(generation_fitnesses[current_species] ~= nil) then
+        generation_fitnesses[current_species] = generation_fitnesses[current_species] + fitness
+    else
+        generation_fitnesses[current_species] = fitness
+    end
+
+    if(fitness > generation_max_fitness) then
+        generation_max_fitness = fitness
+    end  
+    if(fitness > world_max_fitness) then
+        world_max_fitness = fitness
+        most_fit_species = generation[current_species]
+    end
+
+    frame_count = -1
+    prev_distance = -2
+    previous_time = 0
+    time_segment = 0
+
+    fitness = 0
+    distance = 0
+    current_gene = 1
+
+    clear_controller()
+
+    current_species = current_species + 1
+    savestate.load(state_file)
+end
+
+--proceeds to the next generation 
+function next_generation()
+    select_best_species()
+    current_generation = current_generation + 1
+    generation_max_fitness = 0
+    current_species = 1
+end  
+
+
+--compute fitness
+function get_fitness_score()
+    local score = 0
+    time_segment = time - previous_time
+
+    if(distance > -1) then
+        score = (1 / time_segment)
+    end
+    return score
+end
+
+
+function write_to_csv()
+    csv_file:write("\n")
+    csv_file:write(current_generation .. ",")
+    csv_file:write(current_species .. ",")
+    csv_file:write(fitness .. ",")
+    csv_file:write(current_gene .. ",")
+    csv_file:write(distance)
+    csv_file:flush()
+end
+
+function printGenome()
+    local str = ""
+
+    print("ID: " .. generation[current_species-1].id)
+    print("Furthest Gene: " .. generation[current_species-1].furthest_gene_reached)
+    for i = 1, generation[current_species-1].furthest_gene_reached do
+        str = str .. generation[current_species-1].genome[i]
+    end
+    print(str)
+end
+function play()
+    game = gameinfo.getromname()
+    correct_game = "Mario Kart 64 (USA)" == game
+    if correct_game ~= true then
+        print("This is not the correct ROM, need Mario Kart 64 (USA)")
+    end
+
+    initialize_things()
+    while correct_game do
+        local verbose = false
+        if((frame_count>300 and --more than 5 seconds and not going forward or velocity isn't fast enough
+             (distance < prev_distance or util.readVelocity() < VELOCITY_THRESHOLD))) then 
+            write_to_csv()
+            next_species()
+            if verbose then
+                printGenome()
+            end
+        elseif(current_species > num_species) then
+            next_generation()
+        else 
+            refresh()
+            display_info()
+        end
+        
+        ------------------------------------------------------Update 
+
+        if(frame_count % frame_interval == 0) then
+            gene_to_controller(generation[current_species].genome[current_gene])
+            current_gene = current_gene + 1
+        end
+
+        joypad.set(controller)
+        if(distance % 5 == 0 and distance ~= prev_distance) then
+            fitness = fitness + get_fitness_score()
+            prev_distance = distance 
+            previous_time = time
+        end
+
+        emu.frameadvance()
+    end
+end
+
+play()
 
 file:close()
