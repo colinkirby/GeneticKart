@@ -11,7 +11,7 @@ Instructions
 3. Get Mario Kart 64 (USA) rom, in this repository (or from a quick google search)
     -Important that it is the USA version of the ROM
 4. Open ROM in Bizhawk (Emuhawk)
-5. Go to tools -> lua console -> script -> open script, then open the Play.lua script in this directory
+5. Go to tools -> lua console -> script -> open script, then open the Play.lua script
 
 Special thanks to
 ----------------
